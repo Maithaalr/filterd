@@ -130,43 +130,41 @@ if uploaded_file:
                 st.markdown("<br>", unsafe_allow_html=True)
 
     with tab3:
-        st.markdown("### تحليل البيانات المفقودة")
+        st.markdown("###  تحليل مفقودات عمود محدد")
 
         # فلترة استبعاد عاملين البلدية
         if 'الدائرة' in df.columns and 'الوظيفة' in df.columns:
-            filtered_df_missing = df[~((df['الدائرة'] == 'AM.دائرة البلدية والتخطيط') & (df['الوظيفة'] == 'عامل'))].copy()
+            filtered_df = df[~((df['الدائرة'] == 'AM.دائرة البلدية والتخطيط') & (df['الوظيفة'] == 'عامل'))].copy()
         else:
-            filtered_df_missing = df.copy()
+            filtered_df = df.copy()
 
-        # حساب عدد ونسبة المفقودات
-        missing_count = filtered_df_missing.isnull().sum()
-        missing_percent = filtered_df_missing.isnull().mean() * 100
+        selected_column = st.selectbox("اختر عمود", filtered_df.columns)
 
-        missing_summary = pd.DataFrame({
-            'العمود': missing_count.index,
-            'عدد القيم المفقودة': missing_count.values,
-            'النسبة المئوية': missing_percent.values.round(2)
-        })
+        if selected_column:
+            total = filtered_df.shape[0]
+            missing = filtered_df[selected_column].isnull().sum()
+            present = total - missing
 
-        # فقط الأعمدة اللي فيها مفقودات
-        missing_summary = missing_summary[missing_summary['عدد القيم المفقودة'] > 0]
+            values = [present, missing]
+            labels = ['موجودة', 'مفقودة']
 
-        if not missing_summary.empty:
-            st.markdown("#### إجمالي القيم المفقودة (باستثناء عاملين البلدية):")
-            st.dataframe(missing_summary)
-
-            fig_missing = px.bar(
-                missing_summary,
-                x='العمود',
-                y='عدد القيم المفقودة',
-                color='النسبة المئوية',
-                text=missing_summary.apply(lambda row: f"{row['عدد القيم المفقودة']} | {row['النسبة المئوية']}%", axis=1),
-                color_continuous_scale=['#C8D9E6', '#2F4156']
+            fig_donut = px.pie(
+                names=labels,
+                values=values,
+                hole=0.5,
+                color=labels,
+                color_discrete_map={
+                    'مفقودة': '#C8D9E6',
+                    'موجودة': '#2F4156'
+                }
             )
-            fig_missing.update_layout(title="إجمالي القيم المفقودة", title_x=0.5, xaxis_tickangle=-45)
-            st.plotly_chart(fig_missing, use_container_width=True)
-        else:
-            st.success("لا توجد قيم مفقودة بعد استبعاد عاملين البلدية 🎉")
+            fig_donut.update_traces(
+                text=[f'{v} | {round(v/total*100)}%' for v in values],
+                textinfo='text+label'
+            )
+            fig_donut.update_layout(title=f"نسبة البيانات في العمود: {selected_column}", title_x=0.5)
+            st.plotly_chart(fig_donut, use_container_width=True)
 
-else:
-    st.warning("يرجى رفع ملف بيانات الموظفين أولًا.")
+
+        else:
+            st.warning("يرجى رفع ملف بيانات الموظفين أولًا.")
