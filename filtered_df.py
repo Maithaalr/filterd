@@ -50,24 +50,28 @@ if uploaded_file:
     df.columns = df.columns.str.strip()
     df = df.loc[:, ~df.columns.duplicated()]
 
-    # استبعاد جهات معينة
+    # فلترة استبعاد الجهات وعمال البلدية
     excluded_departments = ['HC.نادي عجمان للفروسية', 'PD.الشرطة المحلية لإمارة عجمان', 'RC.الديوان الأميري']
     if 'الدائرة' in df.columns:
         df = df[~df['الدائرة'].isin(excluded_departments)]
 
-    tab1, tab2, tab3, tab4 = st.tabs([" نظرة عامة", " تحليلات بصرية", " البيانات المفقودة", " عرض البيانات"])
+    if 'الدائرة' in df.columns and 'الوظيفة' in df.columns:
+        df = df[~((df['الدائرة'] == 'AM.دائرة البلدية والتخطيط') & (df['الوظيفة'] == 'عامل'))]
+
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        " نظرة عامة", 
+        " تحليلات بصرية", 
+        " البيانات المفقودة", 
+        " عرض البيانات", 
+        "تحليل الوظائف حسب الدوائر", 
+        "تحليل العقود حسب الدوائر"
+    ])
 
     with tab2:
         st.markdown("### التحليلات البصرية")
 
-        # فلترة استبعاد عاملين البلدية
-        if 'الدائرة' in df.columns and 'الوظيفة' in df.columns:
-            analysis_df = df[~((df['الدائرة'] == 'AM.دائرة البلدية والتخطيط') & (df['الوظيفة'] == 'عامل'))].copy()
-        else:
-            analysis_df = df.copy()
-
-        if 'الجنسية' in analysis_df.columns:
-            nationality_counts = analysis_df['الجنسية'].value_counts().reset_index()
+        if 'الجنسية' in df.columns:
+            nationality_counts = df['الجنسية'].value_counts().reset_index()
             nationality_counts.columns = ['الجنسية', 'العدد']
             total_employees = nationality_counts['العدد'].sum()
             nationality_counts['النسبة المئوية'] = nationality_counts['العدد'] / total_employees * 100
@@ -83,66 +87,17 @@ if uploaded_file:
                 color='الجنسية',
                 color_discrete_sequence=px.colors.sequential.Blues
             )
-            fig_nat.update_layout(title='عدد الموظفين ونسبهم حسب الجنسية', title_x=0.5, xaxis_title='الجنسية', yaxis_title='عدد الموظفين')
+            fig_nat.update_layout(title='عدد الموظفين ونسبهم حسب الجنسية', title_x=0.5)
             st.plotly_chart(fig_nat, use_container_width=True)
 
-            st.markdown("#### جدول الجنسيات مع العدد والنسبة:")
-            st.dataframe(nationality_counts)
-
-            # Pie Chart
-            fig_pie = px.pie(
-                nationality_counts,
-                names='الجنسية',
-                values='العدد',
-                hole=0.3,
-                title='نسبة الموظفين حسب الجنسية (Pie Chart)',
-                color_discrete_sequence=px.colors.sequential.Blues
-            )
-            fig_pie.update_traces(textinfo='percent+label')
-            st.plotly_chart(fig_pie, use_container_width=True)
-
-            # Box per 5 rows
-            st.markdown("### تفاصيل الجنسيات (كل 5 في صف):")
-            colors = px.colors.sample_colorscale("Blues", [i/len(nationality_counts) for i in range(len(nationality_counts))])
-
-            for i in range(0, len(nationality_counts), 5):
-                row = nationality_counts.iloc[i:i+5]
-                cols = st.columns([1]*len(row))
-                for idx, (j, data) in enumerate(row.iterrows()):
-                    with cols[idx]:
-                        st.markdown(f"""
-                            <div style='
-                                background-color:{colors[idx]};
-                                padding: 10px;
-                                border-radius: 10px;
-                                text-align: center;
-                                color: white;
-                                font-size: 14px;
-                                font-weight: bold;
-                                height: 100px;
-                                display: flex;
-                                flex-direction: column;
-                                justify-content: center;'>
-                                {data['الجنسية']}<br>
-                                {data['العدد']} موظف ({data['النسبة المئوية']}%)
-                            </div>
-                        """, unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-
     with tab3:
-        st.markdown("###  تحليل مفقودات عمود محدد")
+        st.markdown("### تحليل مفقودات عمود محدد")
 
-        # فلترة استبعاد عاملين البلدية
-        if 'الدائرة' in df.columns and 'الوظيفة' in df.columns:
-            filtered_df = df[~((df['الدائرة'] == 'AM.دائرة البلدية والتخطيط') & (df['الوظيفة'] == 'عامل'))].copy()
-        else:
-            filtered_df = df.copy()
-
-        selected_column = st.selectbox("اختر عمود", filtered_df.columns)
+        selected_column = st.selectbox("اختر عمود", df.columns)
 
         if selected_column:
-            total = filtered_df.shape[0]
-            missing = filtered_df[selected_column].isnull().sum()
+            total = df.shape[0]
+            missing = df[selected_column].isnull().sum()
             present = total - missing
 
             values = [present, missing]
@@ -153,10 +108,7 @@ if uploaded_file:
                 values=values,
                 hole=0.5,
                 color=labels,
-                color_discrete_map={
-                    'مفقودة': '#C8D9E6',
-                    'موجودة': '#2F4156'
-                }
+                color_discrete_map={'مفقودة': '#C8D9E6', 'موجودة': '#2F4156'}
             )
             fig_donut.update_traces(
                 text=[f'{v} | {round(v/total*100)}%' for v in values],
@@ -165,6 +117,46 @@ if uploaded_file:
             fig_donut.update_layout(title=f"نسبة البيانات في العمود: {selected_column}", title_x=0.5)
             st.plotly_chart(fig_donut, use_container_width=True)
 
+    with tab4:
+        st.markdown("### عرض البيانات")
+        st.dataframe(df)
 
-        else:
-            st.warning("يرجى رفع ملف بيانات الموظفين أولًا.")
+    with tab5:
+        st.markdown("### تحليل أنواع الوظائف حسب الدوائر")
+
+        if 'الدائرة' in df.columns and 'الوظيفة' in df.columns:
+            job_by_dept = df.groupby(['الدائرة', 'الوظيفة']).size().reset_index(name='العدد')
+            pivot_table = job_by_dept.pivot(index='الدائرة', columns='الوظيفة', values='العدد').fillna(0)
+            st.dataframe(pivot_table)
+
+            fig_jobs = px.bar(
+                job_by_dept,
+                x='الدائرة',
+                y='العدد',
+                color='الوظيفة',
+                barmode='group',
+                title='عدد الموظفين حسب الوظيفة لكل دائرة'
+            )
+            fig_jobs.update_layout(xaxis_title='الدائرة', yaxis_title='عدد الموظفين', title_x=0.5)
+            st.plotly_chart(fig_jobs, use_container_width=True)
+
+    with tab6:
+        st.markdown("### تحليل أنواع العقود حسب الدوائر")
+
+        if 'الدائرة' in df.columns and 'نوع العقد' in df.columns:
+            contract_by_dept = df.groupby(['الدائرة', 'نوع العقد']).size().reset_index(name='العدد')
+            total_per_dept = contract_by_dept.groupby('الدائرة')['العدد'].transform('sum')
+            contract_by_dept['النسبة المئوية'] = (contract_by_dept['العدد'] / total_per_dept * 100).round(1)
+            st.dataframe(contract_by_dept)
+
+            fig_contract = px.bar(
+                contract_by_dept,
+                x='الدائرة',
+                y='العدد',
+                color='نوع العقد',
+                text=contract_by_dept['النسبة المئوية'].apply(lambda x: f"{x}%"),
+                title='توزيع أنواع العقود لكل دائرة (Stacked)',
+                barmode='stack'
+            )
+            fig_contract.update_layout(xaxis_title='الدائرة', yaxis_title='عدد الموظفين', title_x=0.5)
+            st.plotly_chart(fig_contract, use_container_width=True)
